@@ -12,9 +12,9 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
     } else if pattern.starts_with('[') && pattern.ends_with(']') {
         let mut new_pattern = pattern.trim_matches('[').trim_matches(']').bytes();
         input_line.bytes().any(|val| new_pattern.any(|p| val == p))
-    } else if pattern.starts_with('[') && pattern.ends_with('[') {
-        let mut new_pattern = pattern.trim_matches('[').trim_matches(']').bytes();
-        input_line.bytes().any(|val| new_pattern.any(|p| val != p))
+    } else if pattern.starts_with('[') && pattern.ends_with(']') {
+        let pos_pattern: Vec<char> = pattern[1..pattern.len()-1].chars().collect();
+        input_line.chars().any(|c| pos_pattern.contains(&c))
     } else {
         panic!("Unhandled pattern: {}", pattern)
     }
