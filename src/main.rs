@@ -1,5 +1,6 @@
+use regex::Regex;
 use std::env;
-use std::io;
+use std::io::{self, BufRead};
 use std::process;
 
 fn match_pattern(input_line: &str, pattern: &str) -> bool {
@@ -18,7 +19,9 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
             input_line.chars().any(|c| new_pattern.contains(c))
         }
     } else {
-        panic!("Unhandled pattern: {}", pattern)
+        let regex_pattern = format!("^{}$", pattern);
+        let re = Regex::new(&regex_pattern).unwrap();
+        re.is_match(input_line.trim())
     }
 }
 
