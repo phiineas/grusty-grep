@@ -11,7 +11,7 @@ fn is_alphanumeric(c: char) -> bool {
 }
 
 fn match_pattern(input: &str, pattern: &str) -> bool {
-    let mut input_chars = input.chars();
+    let mut input_chars = input.chars().peekable();
     let mut pattern_chars = pattern.chars().peekable();
 
     while let Some(pat) = pattern_chars.next() {
@@ -47,7 +47,7 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
                 }
             }
             '[' => {
-                // handle positive and negative character group
+                // handle character groups
                 let mut char_group = String::new();
                 let mut negate = false;
 
@@ -64,7 +64,6 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
                     char_group.push(c);
                 }
 
-                // match input character against the group
                 if let Some(input_char) = input_chars.next() {
                     let is_match = char_group.contains(input_char);
                     if negate {
@@ -81,7 +80,6 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
                 }
             }
             _ => {
-                // match literal char
                 if let Some(input_char) = input_chars.next() {
                     if input_char != pat {
                         return false;
@@ -93,7 +91,7 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
         }
     }
 
-    input_chars.next().is_none()
+    input_chars.peek().is_none()
 }
 
 fn main() {
