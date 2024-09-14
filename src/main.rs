@@ -4,6 +4,14 @@ use std::env;
 use std::io::{self, BufRead};
 use std::process;
 
+fn convert_to_regex_pattern(pattern: &str) -> &str {
+    match pattern {
+        "\\d" => r"\d",
+        "\\w" => r"\w",
+        _ => pattern,
+    }
+}
+
 fn match_pattern(input_line: &str, pattern: &str) -> bool {
     if pattern.chars().count() == 1 {
         return input_line.contains(pattern);
@@ -20,12 +28,7 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
             input_line.chars().any(|c| new_pattern.contains(c))
         }
     } else {
-        let regex_pattern = match pattern {
-            "\\d" => r"\d",
-            "\\w" => r"\w",
-            _ => pattern,
-        };
-        
+        let regex_pattern = convert_to_regex_pattern(pattern);
         let re = Regex::new(regex_pattern).unwrap();
         re.is_match(input_line)
     }
