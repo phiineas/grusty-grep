@@ -38,42 +38,48 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
                                 return false;
                             }
                         }
-                        _ => {
-                            panic!("Unsupported escape sequence: \\{}", next_pat);
-                        }
+                        _ => return false, // unsupported escape sequence
                     }
                 } else {
-                    panic!("Incomplete escape sequence");
+                    return false; // dangling escape character
                 }
             }
             '[' => {
-                // handle character groups
-                let mut char_group = String::new();
-                let mut negate = false;
-
-                // Check if it's a negative character group
-                if let Some('^') = pattern_chars.peek() {
-                    negate = true;
-                    pattern_chars.next(); // Skip '^'
-                }
-
-                while let Some(c) = pattern_chars.next() {
-                    if c == ']' {
+                // handle character classes
+                let mut char_class = Vec::new();
+                while let Some(class_char) = pattern_chars.next() {
+                    if class_char == ']' {
                         break;
                     }
-                    char_group.push(c);
+                    char_class.push(class_char);
+                }
+
+                if char_class.is_empty() || char_class.last() != Some(&']') {
+                    return false; // invalid or incomplete character class
                 }
 
                 if let Some(input_char) = input_chars.next() {
-                    let is_match = char_group.contains(input_char);
-                    if negate {
-                        if is_match {
-                            return false;
+                    let mut matched = false;
+                    let mut i = 0;
+                    while i < char_class.len() {
+                        if i + 2 < char_class.len() && char_class[i + 1] == '-' {
+                            // handle range like a-z
+                            if input_char >= char_class[i] && input_char <= char_class[i + 2] {
+                                matched = true;
+                                break;
+                            }
+                            i += 3;
+                        } else {
+                            // handle single character
+                            if input_char == char_class[i] {
+                                matched = true;
+                                break;
+                            }
+                            i += 1;
                         }
-                    } else {
-                        if !is_match {
-                            return false;
-                        }
+                    }
+                    if !matched {
+                        return false;
                     }
                 } else {
                     return false;
@@ -91,7 +97,7 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
         }
     }
 
-    input_chars.peek().is_none()
+    input_chars.next().is_none() 
 }
 
 fn main() {
