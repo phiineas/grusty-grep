@@ -34,13 +34,12 @@ fn main() {
     }
 
     let pattern = env::args().nth(2).unwrap();
-    let mut input_line = String::new();
-
-    io::stdin().read_line(&mut input_line).unwrap();
+    let stdin = io::stdin();
+    let input_line = stdin.lock().lines().next().unwrap().unwrap();
 
     if match_pattern(&input_line, &pattern) {
-        process::exit(0)
+        process::exit(0);
     } else {
-        process::exit(1)
+        process::exit(1);
     }
 }
