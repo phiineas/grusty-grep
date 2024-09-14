@@ -10,11 +10,13 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
     } else if pattern == "\\w" {
         return input_line.contains(|c: char| c.is_alphanumeric());
     } else if pattern.starts_with('[') && pattern.ends_with(']') {
-        let mut new_pattern = pattern.trim_matches('[').trim_matches(']').bytes();
-        input_line.bytes().any(|val| new_pattern.any(|p| val == p))
-    } else if pattern.starts_with('[') && pattern.ends_with(']') {
-        let new_pattern_1 = &pattern[2..pattern.len() - 1];
-        !input_line.chars().any(|c| new_pattern_1.contains(c))
+        if pattern.starts_with("[^") {
+            let new_pattern = &pattern[2..pattern.len() - 1];
+            !input_line.chars().any(|c| new_pattern.contains(c))
+        } else {
+            let new_pattern = &pattern[1..pattern.len() - 1];
+            input_line.chars().any(|c| new_pattern.contains(c))
+        }
     } else {
         panic!("Unhandled pattern: {}", pattern)
     }
