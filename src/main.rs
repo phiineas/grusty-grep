@@ -17,7 +17,7 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
     while let Some(pat) = pattern_chars.next() {
         match pat {
             '\\' => {
-                // handle escaped sequences like \d, \w, etc.
+                // handle escaped sequences 
                 if let Some(next_pat) = pattern_chars.next() {
                     match next_pat {
                         'd' => {
@@ -47,6 +47,15 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
             '[' => {
                 // handle character classes
                 let mut char_class = Vec::new();
+                let mut negate = false;
+
+                if let Some(next_char) = pattern_chars.peek() {
+                    if *next_char == '^' {
+                        negate = true;
+                        pattern_chars.next(); // Skip the '^'
+                    }
+                }
+
                 while let Some(class_char) = pattern_chars.next() {
                     if class_char == ']' {
                         break;
@@ -54,23 +63,20 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
                     char_class.push(class_char);
                 }
 
-                if char_class.is_empty() || char_class.last() != Some(&']') {
-                    return false; // invalid or incomplete character class
-                }
-
                 if let Some(input_char) = input_chars.next() {
                     let mut matched = false;
                     let mut i = 0;
+
                     while i < char_class.len() {
                         if i + 2 < char_class.len() && char_class[i + 1] == '-' {
-                            // handle range like a-z
+                            // handle ranges like a-z
                             if input_char >= char_class[i] && input_char <= char_class[i + 2] {
                                 matched = true;
                                 break;
                             }
                             i += 3;
                         } else {
-                            // handle single character
+                            // handle single characters
                             if input_char == char_class[i] {
                                 matched = true;
                                 break;
@@ -78,14 +84,22 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
                             i += 1;
                         }
                     }
-                    if !matched {
-                        return false;
+
+                    if negate {
+                        if matched {
+                            return false;
+                        }
+                    } else {
+                        if !matched {
+                            return false;
+                        }
                     }
                 } else {
                     return false;
                 }
             }
             _ => {
+                // match literal characters
                 if let Some(input_char) = input_chars.next() {
                     if input_char != pat {
                         return false;
@@ -97,7 +111,7 @@ fn match_pattern(input: &str, pattern: &str) -> bool {
         }
     }
 
-    input_chars.next().is_none() 
+    input_chars.next().is_none()
 }
 
 fn main() {
