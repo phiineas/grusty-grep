@@ -1,3 +1,4 @@
+extern crate regex;
 use regex::Regex;
 use std::env;
 use std::io::{self, BufRead};
@@ -19,9 +20,14 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
             input_line.chars().any(|c| new_pattern.contains(c))
         }
     } else {
-        let regex_pattern = format!("^{}$", pattern);
-        let re = Regex::new(&regex_pattern).unwrap();
-        re.is_match(input_line.trim())
+        let regex_pattern = match pattern {
+            "\\d" => r"\d",
+            "\\w" => r"\w",
+            _ => pattern,
+        };
+        
+        let re = Regex::new(regex_pattern).unwrap();
+        re.is_match(input_line)
     }
 }
 
@@ -30,16 +36,13 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
 fn main() {
     if env::args().nth(1).unwrap() != "-E" {
         println!("Expected first argument to be '-E'");
-        process::exit(1);
-    }
-
-    let pattern = env::args().nth(2).unwrap();
-    let stdin = io::stdin();
-    let input_line = stdin.lock().lines().next().unwrap().unwrap();
-
-    if match_pattern(&input_line, &pattern) {
-        process::exit(0);
     } else {
-        process::exit(1);
+        let pattern = env::args().nth(2).unwrap();
+        let input_line = env::args().nth(3).unwrap();
+        if match_pattern(&input_line, &pattern) {
+            std::process::exit(0);
+        } else {
+            std::process::exit(1);
+        }
     }
 }
