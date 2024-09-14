@@ -2,115 +2,115 @@ use std::env;
 use std::io;
 use std::process;
 
-enum Pattern {
-    Digit,
-    Alphanumeric,
-    Literal(char),
-    Group(bool, Vec<char>),
+fn is_digit(c: char) -> bool {
+    c.is_ascii_digit()
 }
 
-fn build_patterns(pattern: &str) -> Vec<Pattern> {
-    let mut iter = pattern.chars();
-    let mut patterns = Vec::new();
+fn is_alphanumeric(c: char) -> bool {
+    c.is_alphanumeric()
+}
 
-    loop {
-        let current = iter.next();
-        if current.is_none() {
-            break;
-        }
+fn match_pattern(input: &str, pattern: &str) -> bool {
+    let mut input_chars = input.chars();
+    let mut pattern_chars = pattern.chars().peekable();
 
-        patterns.push(match current.unwrap() {
+    while let Some(pat) = pattern_chars.next() {
+        match pat {
             '\\' => {
-                let special = iter.next();
-                if special.is_none() {
-                    panic!("Incomplete special character");
-                }
-                match special.unwrap() {
-                    'd' => Pattern::Digit,
-                    'w' => Pattern::Alphanumeric,
-                    '\\' => Pattern::Literal('\\'),
-                    _ => panic!("Invalid special character"),
+                // handle escaped sequences like \d, \w, etc.
+                if let Some(next_pat) = pattern_chars.next() {
+                    match next_pat {
+                        'd' => {
+                            if let Some(input_char) = input_chars.next() {
+                                if !is_digit(input_char) {
+                                    return false;
+                                }
+                            } else {
+                                return false;
+                            }
+                        }
+                        'w' => {
+                            if let Some(input_char) = input_chars.next() {
+                                if !is_alphanumeric(input_char) {
+                                    return false;
+                                }
+                            } else {
+                                return false;
+                            }
+                        }
+                        _ => {
+                            panic!("Unsupported escape sequence: \\{}", next_pat);
+                        }
+                    }
+                } else {
+                    panic!("Incomplete escape sequence");
                 }
             }
             '[' => {
-                let (positive, group) = build_group_pattern(&mut iter);
-                Pattern::Group(positive, group)
-            }
-            l => Pattern::Literal(l),
-        });
-    }
+                // handle positive and negative character group
+                let mut char_group = String::new();
+                let mut negate = false;
 
-    patterns
-}
+                // Check if it's a negative character group
+                if let Some('^') = pattern_chars.peek() {
+                    negate = true;
+                    pattern_chars.next(); // Skip '^'
+                }
 
-fn build_group_pattern(iter: &mut std::str::Chars) -> (bool, Vec<char>) {
-    let mut group = Vec::new();
-    let mut positive = true;
+                while let Some(c) = pattern_chars.next() {
+                    if c == ']' {
+                        break;
+                    }
+                    char_group.push(c);
+                }
 
-    if let Some(&'^') = iter.clone().next() {
-        iter.next();
-        positive = false;
-    }
-
-    while let Some(c) = iter.next() {
-        if c == ']' {
-            break;
-        }
-        group.push(c);
-    }
-
-    (positive, group)
-}
-
-fn match_pattern(input_line: &str, pattern: &str) -> bool {
-    let patterns = build_patterns(pattern);
-
-    for pat in patterns {
-        match pat {
-            Pattern::Digit => {
-                if !input_line.chars().any(|c| c.is_digit(10)) {
+                // match input character against the group
+                if let Some(input_char) = input_chars.next() {
+                    let is_match = char_group.contains(input_char);
+                    if negate {
+                        if is_match {
+                            return false;
+                        }
+                    } else {
+                        if !is_match {
+                            return false;
+                        }
+                    }
+                } else {
                     return false;
                 }
             }
-            Pattern::Alphanumeric => {
-                if !input_line.chars().any(|c| c.is_alphanumeric()) {
-                    return false;
-                }
-            }
-            Pattern::Literal(l) => {
-                if !input_line.contains(l) {
-                    return false;
-                }
-            }
-            Pattern::Group(positive, group) => {
-                if positive {
-                    if !input_line.chars().any(|c| group.contains(&c)) {
+            _ => {
+                // match literal char
+                if let Some(input_char) = input_chars.next() {
+                    if input_char != pat {
                         return false;
                     }
                 } else {
-                    if input_line.chars().any(|c| group.contains(&c)) {
-                        return false;
-                    }
+                    return false;
                 }
             }
         }
     }
 
-    true
+    input_chars.next().is_none()
 }
 
 fn main() {
     if env::args().nth(1).unwrap() != "-E" {
-        eprintln!("Usage: echo <input_text> | your_program.sh -E <pattern>");
+        println!("Expected first argument to be '-E'");
         process::exit(1);
     }
 
     let pattern = env::args().nth(2).unwrap();
-    let input = io::stdin().lock().lines().next().unwrap().unwrap();
+    let mut input_line = String::new();
 
-    if match_pattern(&input, &pattern) {
-        println!("Match found");
+    io::stdin().read_line(&mut input_line).unwrap();
+    input_line = input_line.trim().to_string(); 
+
+    if match_pattern(&input_line, &pattern) {
+        process::exit(0);
     } else {
-        println!("No match");
+        process::exit(1);
     }
 }
