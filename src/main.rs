@@ -4,11 +4,11 @@ use std::env;
 use std::io::{self, BufRead};
 use std::process;
 
-fn convert_to_regex_pattern(pattern: &str) -> &str {
+fn convert_to_regex_pattern(pattern: &str) -> String {
     match pattern {
-        "\\d" => r"\d",
-        "\\w" => r"\w",
-        _ => pattern,
+        "\\d" => r"\d".to_string(),
+        "\\w" => r"\w".to_string(),
+        _ => pattern.to_string(),
     }
 }
 
@@ -29,7 +29,7 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
         }
     } else {
         let regex_pattern = convert_to_regex_pattern(pattern);
-        let re = Regex::new(regex_pattern).unwrap();
+        let re = Regex::new(&regex_pattern).unwrap();
         re.is_match(input_line)
     }
 }
