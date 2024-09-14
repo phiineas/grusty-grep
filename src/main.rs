@@ -13,8 +13,8 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
         let mut new_pattern = pattern.trim_matches('[').trim_matches(']').bytes();
         input_line.bytes().any(|val| new_pattern.any(|p| val == p))
     } else if pattern.starts_with('[') && pattern.ends_with(']') {
-        let pos_pattern: Vec<char> = pattern[1..pattern.len()-1].chars().collect();
-        input_line.chars().any(|c| pos_pattern.contains(&c))
+        let mut new_pattern = pattern.trim_matches('[').trim_matches(']').bytes();
+        !input_line.bytes().any(|val| new_pattern.any(|p| val == p))
     } else {
         panic!("Unhandled pattern: {}", pattern)
     }
@@ -23,19 +23,19 @@ fn match_pattern(input_line: &str, pattern: &str) -> bool {
 // usage- echo <input_text> | your_program.sh -E <pattern>
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 3 || args[1] != "-E" {
-        println!("Usage: your_program -E <pattern>");
+    if env::args().nth(1).unwrap() != "-E" {
+        println!("Expected first argument to be '-E'");
         process::exit(1);
     }
 
-    let pattern = &args[2];
-    let stdin = io::stdin();
-    let input_line = stdin.lock().lines().next().unwrap().unwrap();
+    let pattern = env::args().nth(2).unwrap();
+    let mut input_line = String::new();
 
-    if match_pattern(&input_line, pattern) {
-        process::exit(0);
+    io::stdin().read_line(&mut input_line).unwrap();
+
+    if match_pattern(&input_line, &pattern) {
+        process::exit(0)
     } else {
-        process::exit(1);
+        process::exit(1)
     }
 }
