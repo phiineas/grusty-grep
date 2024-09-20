@@ -1,17 +1,18 @@
 use std::env;
 use std::io;
-use std::io::Read;
 use std::process;
 use std::str::Chars;
 
+// Enum representing different pattern types
 enum Pattern {
     Literal(char),
     Digit,
     Alphanumeric,
     Group(bool, String),
-    StartOfString,
+    StartOfLine,
 }
 
+// Functions for matching different patterns
 fn match_literal(chars: &mut Chars, literal: char) -> bool {
     chars.next().map_or(false, |c| c == literal)
 }
@@ -28,46 +29,37 @@ fn match_group(chars: &mut Chars, group: &str, positive: bool) -> bool {
     chars.next().map_or(false, |c| group.contains(c) == positive)
 }
 
-fn match_start_of_string(chars: &mut Chars) -> bool {
-    chars.as_str().is_empty()
+fn match_start_of_line(chars: &Chars, input_line: &str) -> bool {
+    chars.as_str() == input_line
 }
 
-fn parse_pattern(pattern: &str) -> Vec<Pattern> {
-    let mut patterns = Vec::new();
-    let mut chars = pattern.chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '^' => patterns.push(Pattern::StartOfString),
-            '0'..='9' => patterns.push(Pattern::Digit),
-            'a'..='z' | 'A'..='Z' => patterns.push(Pattern::Alphanumeric),
-            _ => patterns.push(Pattern::Literal(c)),
-        }
-    }
-    patterns
-}
+// function to match a pattern with the input line
+fn match_pattern(input_line: &str, pattern: &[Pattern]) -> bool {
+    let mut iter = input_line.chars();
 
-fn match_pattern(patterns: &[Pattern], input: &str) -> bool {
-    let mut chars = input.chars();
-    for pattern in patterns {
-        let matched = match pattern {
-            Pattern::Literal(c) => match_literal(&mut chars, *c),
-            Pattern::Digit => match_digit(&mut chars),
-            Pattern::Alphanumeric => match_alphanumeric(&mut chars),
-            Pattern::Group(positive, group) => match_group(&mut chars, group, *positive),
-            Pattern::StartOfString => match_start_of_string(&mut chars),
+    for pat in pattern {
+        let matched = match pat {
+            Pattern::Literal(l) => match_literal(&mut iter, *l),
+            Pattern::Digit => match_digit(&mut iter),
+            Pattern::Alphanumeric => match_alphanumeric(&mut iter),
+            Pattern::Group(positive, group) => match_group(&mut iter, group, *positive),
+            Pattern::StartOfLine => match_start_of_line(&iter, input_line),
         };
+
         if !matched {
             return false;
         }
     }
+
     true
 }
 
+// helper to parse character group patterns like [a-z]
 fn build_char_group_patterns(iter: &mut Chars) -> Result<(bool, String), String> {
     let mut group = String::new();
     let mut positive = true;
 
-    if let Some('^') = iter.clone().next() {
+    if iter.clone().next() == Some('^') {
         positive = false;
         iter.next();
     }
@@ -82,12 +74,14 @@ fn build_char_group_patterns(iter: &mut Chars) -> Result<(bool, String), String>
     Err("Incomplete character group".to_string())
 }
 
+// builds pattern sequence from string input (e.g., "^log", "\d", "[a-z]")
 fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
     let mut iter = pattern.chars();
     let mut patterns = Vec::new();
 
     while let Some(current) = iter.next() {
-        patterns.push(match current {
+        let pat = match current {
+            '^' => Pattern::StartOfLine,
             '\\' => match iter.next() {
                 Some('d') => Pattern::Digit,
                 Some('w') => Pattern::Alphanumeric,
@@ -99,30 +93,36 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
                 Pattern::Group(positive, group)
             }
             l => Pattern::Literal(l),
-        });
+        };
+        patterns.push(pat);
     }
 
     Ok(patterns)
 }
 
-// usage: echo <input_text> | your_program.sh -E <pattern>
-
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 3 || args[1] != "-E" {
-        eprintln!("Usage: {} -E <pattern>", args[0]);
-        process::exit(1);
+// function to handle input processing, pattern building, and matching
+fn process_input_and_match() -> Result<(), String> {
+    if env::args().nth(1).unwrap_or_default() != "-E" {
+        return Err("Expected first argument to be '-E'".to_string());
     }
 
-    let pattern = &args[2];
-    let patterns = parse_pattern(pattern);
+    let pattern = env::args().nth(2).ok_or_else(|| "Pattern is required".to_string())?;
 
-    let mut input = String::new();
-    io::stdin().read_to_string(&mut input).unwrap();
+    let mut input_line = String::new();
+    io::stdin().read_line(&mut input_line).map_err(|_| "Failed to read input".to_string())?;
 
-    if match_pattern(&patterns, &input) {
+    let patterns = build_patterns(&pattern)?;
+
+    if match_pattern(&input_line.trim(), &patterns) {
         process::exit(0);
     } else {
+        process::exit(1);
+    }
+}
+
+fn main() {
+    if let Err(err) = process_input_and_match() {
+        eprintln!("{}", err);
         process::exit(1);
     }
 }
