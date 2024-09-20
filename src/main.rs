@@ -1,5 +1,6 @@
 use std::env;
 use std::io;
+use std::io::Read;
 use std::process;
 use std::str::Chars;
 
@@ -8,6 +9,7 @@ enum Pattern {
     Digit,
     Alphanumeric,
     Group(bool, String),
+    StartOfString,
 }
 
 fn match_literal(chars: &mut Chars, literal: char) -> bool {
@@ -26,29 +28,39 @@ fn match_group(chars: &mut Chars, group: &str, positive: bool) -> bool {
     chars.next().map_or(false, |c| group.contains(c) == positive)
 }
 
-fn match_pattern(input_line: &str, pattern: &[Pattern]) -> bool {
-    for i in 0..input_line.len() {
-        let mut iter = input_line[i..].chars();
-        let mut matched = true;
+fn match_start_of_string(chars: &mut Chars) -> bool {
+    chars.as_str().is_empty()
+}
 
-        for pat in pattern {
-            matched = match pat {
-                Pattern::Literal(l) => match_literal(&mut iter, *l),
-                Pattern::Digit => match_digit(&mut iter),
-                Pattern::Alphanumeric => match_alphanumeric(&mut iter),
-                Pattern::Group(positive, group) => match_group(&mut iter, group, *positive),
-            };
-
-            if !matched {
-                break;
-            }
-        }
-
-        if matched {
-            return true;
+fn parse_pattern(pattern: &str) -> Vec<Pattern> {
+    let mut patterns = Vec::new();
+    let mut chars = pattern.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '^' => patterns.push(Pattern::StartOfString),
+            '0'..='9' => patterns.push(Pattern::Digit),
+            'a'..='z' | 'A'..='Z' => patterns.push(Pattern::Alphanumeric),
+            _ => patterns.push(Pattern::Literal(c)),
         }
     }
-    false
+    patterns
+}
+
+fn match_pattern(patterns: &[Pattern], input: &str) -> bool {
+    let mut chars = input.chars();
+    for pattern in patterns {
+        let matched = match pattern {
+            Pattern::Literal(c) => match_literal(&mut chars, *c),
+            Pattern::Digit => match_digit(&mut chars),
+            Pattern::Alphanumeric => match_alphanumeric(&mut chars),
+            Pattern::Group(positive, group) => match_group(&mut chars, group, *positive),
+            Pattern::StartOfString => match_start_of_string(&mut chars),
+        };
+        if !matched {
+            return false;
+        }
+    }
+    true
 }
 
 fn build_char_group_patterns(iter: &mut Chars) -> Result<(bool, String), String> {
@@ -96,25 +108,19 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
 // usage: echo <input_text> | your_program.sh -E <pattern>
 
 fn main() {
-    if env::args().nth(1).unwrap_or_default() != "-E" {
-        eprintln!("Expected first argument to be '-E'");
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 3 || args[1] != "-E" {
+        eprintln!("Usage: {} -E <pattern>", args[0]);
         process::exit(1);
     }
 
-    let pattern = env::args().nth(2).unwrap_or_else(|| {
-        eprintln!("Pattern is required");
-        process::exit(1);
-    });
+    let pattern = &args[2];
+    let patterns = parse_pattern(pattern);
 
-    let mut input_line = String::new();
-    io::stdin().read_line(&mut input_line).expect("Failed to read input");
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input).unwrap();
 
-    let patterns = build_patterns(&pattern).unwrap_or_else(|err| {
-        eprintln!("Pattern error: {}", err);
-        process::exit(1);
-    });
-
-    if match_pattern(&input_line.trim(), &patterns) {
+    if match_pattern(&patterns, &input) {
         process::exit(0);
     } else {
         process::exit(1);
