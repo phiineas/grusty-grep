@@ -3,7 +3,6 @@ use std::io;
 use std::process;
 use std::str::Chars;
 
-// Enum representing different pattern types
 enum Pattern {
     Literal(char),
     Digit,
@@ -12,7 +11,7 @@ enum Pattern {
     StartOfLine,
 }
 
-// Functions for matching different patterns
+// Matches a literal character (including spaces)
 fn match_literal(chars: &mut Chars, literal: char) -> bool {
     chars.next().map_or(false, |c| c == literal)
 }
@@ -54,7 +53,7 @@ fn match_pattern(input_line: &str, pattern: &[Pattern]) -> bool {
     true
 }
 
-// helper to parse character group patterns like [a-z]
+// helper to build character group patterns like [a-z]
 fn build_char_group_patterns(iter: &mut Chars) -> Result<(bool, String), String> {
     let mut group = String::new();
     let mut positive = true;
@@ -74,7 +73,7 @@ fn build_char_group_patterns(iter: &mut Chars) -> Result<(bool, String), String>
     Err("Incomplete character group".to_string())
 }
 
-// builds pattern sequence from string input (e.g., "^log", "\d", "[a-z]")
+// function to build patterns from the input string
 fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
     let mut iter = pattern.chars();
     let mut patterns = Vec::new();
@@ -100,16 +99,15 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
     Ok(patterns)
 }
 
-// function to handle input processing, pattern building, and matching
 fn process_input_and_match() -> Result<(), String> {
     if env::args().nth(1).unwrap_or_default() != "-E" {
-        return Err("Expected first argument to be '-E'".to_string());
+        return Err("expected first argument to be '-E'".to_string());
     }
 
-    let pattern = env::args().nth(2).ok_or_else(|| "Pattern is required".to_string())?;
+    let pattern = env::args().nth(2).ok_or_else(|| "pattern is required".to_string())?;
 
     let mut input_line = String::new();
-    io::stdin().read_line(&mut input_line).map_err(|_| "Failed to read input".to_string())?;
+    io::stdin().read_line(&mut input_line).map_err(|_| "failed to read input".to_string())?;
 
     let patterns = build_patterns(&pattern)?;
 
@@ -120,6 +118,7 @@ fn process_input_and_match() -> Result<(), String> {
     }
 }
 
+// usage: echo <input_text> | your_program.sh -E <pattern>
 fn main() {
     if let Err(err) = process_input_and_match() {
         eprintln!("{}", err);
