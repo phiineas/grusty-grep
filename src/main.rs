@@ -2,6 +2,7 @@ use std::env;
 use std::io;
 use std::process;
 use std::str::Chars;
+use std::iter::Peekable;
 
 enum Pattern {
     Literal(char),
@@ -9,26 +10,31 @@ enum Pattern {
     Alphanumeric,
     Group(bool, String),
     StartOfLine,
+    EndOfLine,
 }
 
-fn match_literal(chars: &mut Chars, literal: char) -> bool {
-    chars.next().map_or(false, |c| c == literal)
+fn match_literal(chars: &mut Peekable<std::slice::Iter<'_, char>>, literal: char) -> bool {
+    chars.next().map_or(false, |&c| c == literal)
 }
 
-fn match_digit(chars: &mut Chars) -> bool {
-    chars.next().map_or(false, |c| c.is_digit(10))
+fn match_digit(chars: &mut Peekable<std::slice::Iter<'_, char>>) -> bool {
+    chars.next().map_or(false, |&c| c.is_digit(10))
 }
 
-fn match_alphanumeric(chars: &mut Chars) -> bool {
-    chars.next().map_or(false, |c| c.is_alphanumeric())
+fn match_alphanumeric(chars: &mut Peekable<std::slice::Iter<'_, char>>) -> bool {
+    chars.next().map_or(false, |&c| c.is_alphanumeric())
 }
 
-fn match_group(chars: &mut Chars, group: &str, positive: bool) -> bool {
-    chars.next().map_or(false, |c| group.contains(c) == positive)
+fn match_group(chars: &mut Peekable<std::slice::Iter<'_, char>>, group: &str, positive: bool) -> bool {
+    chars.next().map_or(false, |&c| group.contains(c) == positive)
 }
 
-fn match_start_of_line(chars: &Chars, input_line: &str) -> bool {
-    chars.as_str() == input_line
+fn match_start_of_line(start: usize) -> bool {
+    start == 0
+}
+
+fn match_end_of_line(chars: &mut Peekable<std::slice::Iter<'_, char>>) -> bool {
+    chars.peek().is_none()
 }
 
 // function to match a pattern with the input line
@@ -36,17 +42,18 @@ fn match_pattern(input_line: &str, pattern: &[Pattern]) -> bool {
     let input_chars: Vec<char> = input_line.chars().collect();
     let input_len = input_chars.len();
 
-    for start in 0..input_len {
+    for start in 0..=input_len {
         let mut iter = input_chars[start..].iter().peekable();
         let mut all_matched = true;
 
         for pat in pattern {
             let matched = match pat {
-                Pattern::Literal(l) => iter.next().map_or(false, |&c| c == *l),
-                Pattern::Digit => iter.next().map_or(false, |&c| c.is_digit(10)),
-                Pattern::Alphanumeric => iter.next().map_or(false, |&c| c.is_alphanumeric()),
-                Pattern::Group(positive, group) => iter.next().map_or(false, |&c| group.contains(c) == *positive),
-                Pattern::StartOfLine => start == 0,
+                Pattern::Literal(l) => match_literal(&mut iter, *l),
+                Pattern::Digit => match_digit(&mut iter),
+                Pattern::Alphanumeric => match_alphanumeric(&mut iter),
+                Pattern::Group(positive, group) => match_group(&mut iter, group, *positive),
+                Pattern::StartOfLine => match_start_of_line(start),
+                Pattern::EndOfLine => match_end_of_line(&mut iter),
             };
 
             if !matched {
@@ -80,7 +87,7 @@ fn build_char_group_patterns(iter: &mut Chars) -> Result<(bool, String), String>
         group.push(member);
     }
 
-    Err("Incomplete character group".to_string())
+    Err("incomplete character group".to_string())
 }
 
 // function to build patterns from the input string
@@ -91,6 +98,7 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
     while let Some(current) = iter.next() {
         let pat = match current {
             '^' => Pattern::StartOfLine,
+            '$' => Pattern::EndOfLine,
             '\\' => match iter.next() {
                 Some('d') => Pattern::Digit,
                 Some('w') => Pattern::Alphanumeric,
@@ -121,7 +129,7 @@ fn process_input_and_match() -> Result<(), String> {
 
     let patterns = build_patterns(&pattern)?;
 
-    if match_pattern(&input_line.trim(), &patterns) {
+    if match_pattern(input_line.trim(), &patterns) {
         process::exit(0);
     } else {
         process::exit(1);
