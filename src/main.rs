@@ -56,8 +56,8 @@ fn match_pattern_helper(chars: &mut Peekable<std::slice::Iter<'_, char>>, patter
             Pattern::Digit => match_digit(&mut char_iter),
             Pattern::Alphanumeric => match_alphanumeric(&mut char_iter),
             Pattern::Group(positive, group) => match_group(&mut char_iter, group, *positive),
-            Pattern::StartOfLine => false, 
-            Pattern::EndOfLine => match_end_of_line(&mut char_iter),
+            Pattern::StartOfLine => true, 
+            Pattern::EndOfLine => char_iter.peek().is_none(),
             Pattern::OneOrMore(p) => match_one_or_more(&mut char_iter, p),
         };
         if !matched {
@@ -71,14 +71,18 @@ fn match_pattern_helper(chars: &mut Peekable<std::slice::Iter<'_, char>>, patter
 fn match_pattern(input_line: &str, pattern: &[Pattern]) -> bool {
     let input_chars: Vec<char> = input_line.chars().collect();
     let input_len = input_chars.len();
+    let starts_with_anchor = pattern.first() == Some(&Pattern::StartOfLine);
+    let ends_with_anchor = pattern.last() == Some(&Pattern::EndOfLine);
 
-    for start in 0..=input_len {
+    let start_range = if starts_with_anchor { 0..1 } else { 0..input_len + 1 };
+
+    for start in start_range {
         let mut iter = input_chars[start..].iter().peekable();
-        if pattern.first() == Some(&Pattern::StartOfLine) && start != 0 {
-            continue;
-        }
-        if match_pattern_helper(&mut iter, pattern) {
-            return true;
+        let effective_pattern = if starts_with_anchor { &pattern[1..] } else { pattern };
+        if match_pattern_helper(&mut iter, effective_pattern) {
+            if !ends_with_anchor || iter.peek().is_none() {
+                return true;
+            }
         }
     }
 
