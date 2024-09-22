@@ -11,7 +11,6 @@ enum Pattern {
     StartOfLine,
 }
 
-// Matches a literal character (including spaces)
 fn match_literal(chars: &mut Chars, literal: char) -> bool {
     chars.next().map_or(false, |c| c == literal)
 }
@@ -34,23 +33,34 @@ fn match_start_of_line(chars: &Chars, input_line: &str) -> bool {
 
 // function to match a pattern with the input line
 fn match_pattern(input_line: &str, pattern: &[Pattern]) -> bool {
-    let mut iter = input_line.chars();
+    let input_chars: Vec<char> = input_line.chars().collect();
+    let input_len = input_chars.len();
 
-    for pat in pattern {
-        let matched = match pat {
-            Pattern::Literal(l) => match_literal(&mut iter, *l),
-            Pattern::Digit => match_digit(&mut iter),
-            Pattern::Alphanumeric => match_alphanumeric(&mut iter),
-            Pattern::Group(positive, group) => match_group(&mut iter, group, *positive),
-            Pattern::StartOfLine => match_start_of_line(&iter, input_line),
-        };
+    for start in 0..input_len {
+        let mut iter = input_chars[start..].iter().peekable();
+        let mut all_matched = true;
 
-        if !matched {
-            return false;
+        for pat in pattern {
+            let matched = match pat {
+                Pattern::Literal(l) => iter.next().map_or(false, |&c| c == *l),
+                Pattern::Digit => iter.next().map_or(false, |&c| c.is_digit(10)),
+                Pattern::Alphanumeric => iter.next().map_or(false, |&c| c.is_alphanumeric()),
+                Pattern::Group(positive, group) => iter.next().map_or(false, |&c| group.contains(c) == *positive),
+                Pattern::StartOfLine => start == 0,
+            };
+
+            if !matched {
+                all_matched = false;
+                break;
+            }
+        }
+
+        if all_matched {
+            return true;
         }
     }
 
-    true
+    false
 }
 
 // helper to build character group patterns like [a-z]
@@ -85,7 +95,7 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
                 Some('d') => Pattern::Digit,
                 Some('w') => Pattern::Alphanumeric,
                 Some('\\') => Pattern::Literal('\\'),
-                _ => return Err("Invalid special character".to_string()),
+                _ => return Err("invalid special character".to_string()),
             },
             '[' => {
                 let (positive, group) = build_char_group_patterns(&mut iter)?;
