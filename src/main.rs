@@ -4,6 +4,7 @@ use std::process;
 use std::str::Chars;
 use std::iter::Peekable;
 
+#[derive(Clone, PartialEq)]
 enum Pattern {
     Literal(char),
     Digit,
@@ -11,6 +12,7 @@ enum Pattern {
     Group(bool, String),
     StartOfLine,
     EndOfLine,
+    OneOrMore(Box<Pattern>),
 }
 
 fn match_literal(chars: &mut Peekable<std::slice::Iter<'_, char>>, literal: char) -> bool {
@@ -37,32 +39,45 @@ fn match_end_of_line(chars: &mut Peekable<std::slice::Iter<'_, char>>) -> bool {
     chars.peek().is_none()
 }
 
+fn match_one_or_more(chars: &mut Peekable<std::slice::Iter<'_, char>>, pattern: &Pattern) -> bool {
+    let mut matched = false;
+    while match_pattern_helper(chars, &[pattern.clone()]) {
+        matched = true;
+    }
+    matched
+}
+
 // function to match a pattern with the input line
+fn match_pattern_helper(chars: &mut Peekable<std::slice::Iter<'_, char>>, pattern: &[Pattern]) -> bool {
+    let mut char_iter = chars.clone();
+    for pat in pattern {
+        let matched = match pat {
+            Pattern::Literal(l) => match_literal(&mut char_iter, *l),
+            Pattern::Digit => match_digit(&mut char_iter),
+            Pattern::Alphanumeric => match_alphanumeric(&mut char_iter),
+            Pattern::Group(positive, group) => match_group(&mut char_iter, group, *positive),
+            Pattern::StartOfLine => false, 
+            Pattern::EndOfLine => match_end_of_line(&mut char_iter),
+            Pattern::OneOrMore(p) => match_one_or_more(&mut char_iter, p),
+        };
+        if !matched {
+            return false;
+        }
+    }
+    *chars = char_iter;
+    true
+}
+
 fn match_pattern(input_line: &str, pattern: &[Pattern]) -> bool {
     let input_chars: Vec<char> = input_line.chars().collect();
     let input_len = input_chars.len();
 
     for start in 0..=input_len {
         let mut iter = input_chars[start..].iter().peekable();
-        let mut all_matched = true;
-
-        for pat in pattern {
-            let matched = match pat {
-                Pattern::Literal(l) => match_literal(&mut iter, *l),
-                Pattern::Digit => match_digit(&mut iter),
-                Pattern::Alphanumeric => match_alphanumeric(&mut iter),
-                Pattern::Group(positive, group) => match_group(&mut iter, group, *positive),
-                Pattern::StartOfLine => match_start_of_line(start),
-                Pattern::EndOfLine => match_end_of_line(&mut iter),
-            };
-
-            if !matched {
-                all_matched = false;
-                break;
-            }
+        if pattern.first() == Some(&Pattern::StartOfLine) && start != 0 {
+            continue;
         }
-
-        if all_matched {
+        if match_pattern_helper(&mut iter, pattern) {
             return true;
         }
     }
@@ -71,16 +86,16 @@ fn match_pattern(input_line: &str, pattern: &[Pattern]) -> bool {
 }
 
 // helper to build character group patterns like [a-z]
-fn build_char_group_patterns(iter: &mut Chars) -> Result<(bool, String), String> {
+fn build_char_group_patterns(iter: &mut Peekable<Chars>) -> Result<(bool, String), String> {
     let mut group = String::new();
     let mut positive = true;
 
-    if iter.clone().next() == Some('^') {
+    if iter.peek() == Some(&'^') {
         positive = false;
         iter.next();
     }
 
-    for member in iter {
+    for member in iter.by_ref() {
         if member == ']' {
             return Ok((positive, group));
         }
@@ -90,13 +105,12 @@ fn build_char_group_patterns(iter: &mut Chars) -> Result<(bool, String), String>
     Err("incomplete character group".to_string())
 }
 
-// function to build patterns from the input string
 fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
-    let mut iter = pattern.chars();
+    let mut iter = pattern.chars().peekable();
     let mut patterns = Vec::new();
 
     while let Some(current) = iter.next() {
-        let pat = match current {
+        let mut pat = match current {
             '^' => Pattern::StartOfLine,
             '$' => Pattern::EndOfLine,
             '\\' => match iter.next() {
@@ -111,6 +125,12 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
             }
             l => Pattern::Literal(l),
         };
+
+        if iter.peek() == Some(&'+') {
+            iter.next();
+            pat = Pattern::OneOrMore(Box::new(pat));
+        }
+
         patterns.push(pat);
     }
 
