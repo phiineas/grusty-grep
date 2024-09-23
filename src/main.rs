@@ -14,6 +14,7 @@ enum Pattern {
     EndOfLine,
     OneOrMore(Box<Pattern>),
     ZeroOrOne(Box<Pattern>),
+    Wildcard,
 }
 
 fn match_literal(chars: &mut Peekable<std::slice::Iter<'_, char>>, literal: char) -> bool {
@@ -56,6 +57,10 @@ fn match_zero_or_one(chars: &mut Peekable<std::slice::Iter<'_, char>>, pattern: 
     true
 }
 
+fn match_wildcard(chars: &mut Peekable<std::slice::Iter<'_, char>>) -> bool {
+    chars.next().is_some()
+}
+
 // function to match a pattern with the input line
 fn match_pattern_helper(chars: &mut Peekable<std::slice::Iter<'_, char>>, pattern: &[Pattern]) -> bool {
     let mut char_iter = chars.clone();
@@ -69,6 +74,7 @@ fn match_pattern_helper(chars: &mut Peekable<std::slice::Iter<'_, char>>, patter
             Pattern::EndOfLine => char_iter.peek().is_none(),
             Pattern::OneOrMore(p) => match_one_or_more(&mut char_iter, p),
             Pattern::ZeroOrOne(p) => match_zero_or_one(&mut char_iter, p),
+            Pattern::Wildcard => match_wildcard(&mut char_iter),
         };
         if !matched {
             return false;
@@ -136,7 +142,8 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
             '[' => {
                 let (positive, group) = build_char_group_patterns(&mut iter)?;
                 Pattern::Group(positive, group)
-            }
+            },
+            '.' => Pattern::Wildcard,
             l => Pattern::Literal(l),
         };
 
