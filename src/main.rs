@@ -15,6 +15,7 @@ enum Pattern {
     OneOrMore(Box<Pattern>),
     ZeroOrOne(Box<Pattern>),
     Wildcard,
+    Alternative(Vec<Vec<Pattern>>),
 }
 
 fn match_literal(chars: &mut Peekable<std::slice::Iter<'_, char>>, literal: char) -> bool {
@@ -61,6 +62,17 @@ fn match_wildcard(chars: &mut Peekable<std::slice::Iter<'_, char>>) -> bool {
     chars.next().is_some()
 }
 
+fn match_alternative(chars: &mut Peekable<std::slice::Iter<'_, char>>, alternatives: &[Vec<Pattern>]) -> bool {
+    for alt in alternatives {
+        let mut char_iter = chars.clone();
+        if match_pattern_helper(&mut char_iter, alt) {
+            *chars = char_iter;
+            return true;
+        }
+    }
+    false
+}
+
 // function to match a pattern with the input line
 fn match_pattern_helper(chars: &mut Peekable<std::slice::Iter<'_, char>>, pattern: &[Pattern]) -> bool {
     let mut char_iter = chars.clone();
@@ -70,11 +82,12 @@ fn match_pattern_helper(chars: &mut Peekable<std::slice::Iter<'_, char>>, patter
             Pattern::Digit => match_digit(&mut char_iter),
             Pattern::Alphanumeric => match_alphanumeric(&mut char_iter),
             Pattern::Group(positive, group) => match_group(&mut char_iter, group, *positive),
-            Pattern::StartOfLine => true, 
+            Pattern::StartOfLine => true,
             Pattern::EndOfLine => char_iter.peek().is_none(),
             Pattern::OneOrMore(p) => match_one_or_more(&mut char_iter, p),
             Pattern::ZeroOrOne(p) => match_zero_or_one(&mut char_iter, p),
             Pattern::Wildcard => match_wildcard(&mut char_iter),
+            Pattern::Alternative(alts) => match_alternative(&mut char_iter, alts),
         };
         if !matched {
             return false;
@@ -126,10 +139,37 @@ fn build_char_group_patterns(iter: &mut Peekable<Chars>) -> Result<(bool, String
 }
 
 fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
-    let mut iter = pattern.chars().peekable();
-    let mut patterns = Vec::new();
+    fn parse_alternative(iter: &mut Peekable<Chars>) -> Result<Pattern, String> {
+        let mut alternatives = vec![];
+        let mut current_alt = vec![];
 
-    while let Some(current) = iter.next() {
+        while let Some(&c) = iter.peek() {
+            match c {
+                ')' => {
+                    iter.next();
+                    if !current_alt.is_empty() {
+                        alternatives.push(current_alt);
+                    }
+                    return Ok(Pattern::Alternative(alternatives));
+                }
+                '|' => {
+                    iter.next();
+                    if !current_alt.is_empty() {
+                        alternatives.push(current_alt);
+                        current_alt = vec![];
+                    }
+                }
+                _ => {
+                    current_alt.push(parse_pattern(iter)?);
+                }
+            }
+        }
+
+        Err("unmatched parenthesis".to_string())
+    }
+
+    fn parse_pattern(iter: &mut Peekable<Chars>) -> Result<Pattern, String> {
+        let current = iter.next().ok_or("unexpected end of pattern")?;
         let mut pat = match current {
             '^' => Pattern::StartOfLine,
             '$' => Pattern::EndOfLine,
@@ -140,10 +180,13 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
                 _ => return Err("invalid special character".to_string()),
             },
             '[' => {
-                let (positive, group) = build_char_group_patterns(&mut iter)?;
+                let (positive, group) = build_char_group_patterns(iter)?;
                 Pattern::Group(positive, group)
             },
             '.' => Pattern::Wildcard,
+            '(' => return parse_alternative(iter),
+            ')' => return Err("unmatched closing parenthesis".to_string()),
+            '|' => return Err("unexpected '|' character".to_string()),
             l => Pattern::Literal(l),
         };
 
@@ -161,7 +204,14 @@ fn build_patterns(pattern: &str) -> Result<Vec<Pattern>, String> {
             }
         }
 
-        patterns.push(pat);
+        Ok(pat)
+    }
+
+    let mut iter = pattern.chars().peekable();
+    let mut patterns = vec![];
+
+    while iter.peek().is_some() {
+        patterns.push(parse_pattern(&mut iter)?);
     }
 
     Ok(patterns)
